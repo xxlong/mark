@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:mvc="http://www.springframework.org/schema/mvc" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:spring="http://www.springframework.org/tags"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd  
+              http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd  
+              http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd              
+             http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.0.xsd
+             http://www.springframework.org/tags http://www.springframework.org/tags/spring-tags-3.0.xsd">
+
+	<!--得到注解驱动特性 -->
+	<mvc:annotation-driven />
+	
+	<!-- 引入属性文件 ， 并配置隐藏在点位符变量无法解析或者属性文件不存在时抛出的异常,会优先使用系统属性-->  
+    <!-- <context:property-placeholder location="classpath:database.properties" 
+    	ignore-resource-not-found="true" ignore-unresolvable="true"
+    	properties-ref="defaultConfiguration" system-properties-mode="OVERRIDE"/> -->
+    <!-- 默认的数据库配置值 -->
+    <!-- <util:properties id="defaultConfiguration">
+    	<prop key="jdbc.url">jdbc:hsqldb:hsql://localhost/spitter/spitter</prop>
+    	<prop key="jdbc.driverClassName">org.hsqldb.jdbcDriver</prop>
+    	<prop key="jdbc.username">spitterAdmin</prop>
+    	<prop key="jdbc.password">t0ps3cr3t</prop>
+    </util:properties> -->
+    
+	<!-- 处理对静态资源请求 -->
+	<mvc:resources mapping="/resources/**" location="/resources/" />
+	<!-- <mvc:resources mapping="/styles/**" location="/static_resources/css/" /> -->
+	<mvc:resources mapping="/js/**" location="/WEB-INF/js/" />
+	<mvc:resources mapping="/css/**" location="/WEB-INF/css/" />
+	<mvc:resources mapping="/themes/**" location="/themes/" />
+	<mvc:resources location="/WEB-INF/font/" mapping="/font/**"/>
+	<mvc:resources mapping="/images/**" location="/WEB-INF/images/" />
+	<mvc:resources mapping="/kindeditor-4.1.10/**" location="/WEB-INF/kindeditor-4.1.10/" />
+	<!-- <mvc:resources mapping="/jsp/**" location="/WEB-INF/jsp/" /> -->
+
+	<!-- 包中的所有类会自动被发现并注册为Bean，和完成自动依赖注入的功能 -->
+	<context:component-scan base-package="com.anyway.imagemark" />
+
+	<!-- 启动Spring MVC的注解功能，完成请求和注解POJO的映射 -->
+	<bean
+		class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter" />
+
+	<!-- 支持json -->
+	<bean
+		class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
+		<property name="messageConverters">
+			<list>
+				<bean
+					class="org.springframework.http.converter.json.MappingJacksonHttpMessageConverter"></bean>
+			</list>
+		</property>
+	</bean>
+
+	<!-- 导入配置文件 -->
+	<!-- <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"> 
+		<property name="locations"> <list> <value>classpath:appconfig.properties</value> 
+		</list> </property> </bean> -->
+
+	<!-- <bean class="org.springframework.web.servlet.mvc.annotation. DefaultAnnotationHandlerMapping" 
+		/> -->
+	<!-- <bean class="org.springframework.web.servlet.mvc.annotation. AnnotationMethodHandlerAdapter" 
+		> <property name="messageConverters"> <util:list id="beanList"> <ref bean="mappingJacksonHttpMessageConverter"/> 
+		</util:list> </property> </bean> <bean id="mappingJacksonHttpMessageConverter" 
+		class="org.springframework. http.converter.json.MappingJacksonHttpMessageConverter"> 
+		<property name="supportedMediaTypes"> <list> <value>text/html;charset=UTF-8</value> 
+		</list> </property> </bean> -->
+
+	<context:annotation-config />
+
+	<!-- <bean name="/hello" class="com.anyway.imagemark.controller.HelloWorldController"/> -->
+
+	<!-- 配置表示只支持POST请求 -->
+	<!-- <bean name="/helloWithPOST" class="com.anyway.imagemark.controller.HelloWorldController"> 
+		<property name="supportedMethods" value="POST"></property> </bean> -->
+
+	<bean id="multipartResolver"
+		class="org.springframework.web.multipart.commons.CommonsMultipartResolver"
+		p:maxUploadSize="8000000" p:defaultEncoding="utf-8"></bean>
+
+	<bean id="viewResolver"
+		class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="viewClass">
+			<value>org.springframework.web.servlet.view.InternalResourceView
+			</value>
+		</property>
+		<property name="prefix">
+			<value>/</value>
+		</property>
+		<property name="suffix">
+			<value>.jsp</value>
+		</property>
+	</bean>
+
+	<!-- 解析Tiles布局视图 -->
+	<!-- <bean class="org.springframework.web.servlet.view.tiles2.TilesViewResolver"></bean> 
+		<bean class="org.springframework.web.servlet.view.tiles2.TilesConfigurer"> 
+		<property name="definitions"> <list> <value>/WEB-INF/views/**/views.xml</value> 
+		</list> </property> </bean> -->
+</beans>

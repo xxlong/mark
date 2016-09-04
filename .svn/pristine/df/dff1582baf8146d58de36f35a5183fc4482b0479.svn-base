@@ -1,0 +1,33 @@
+@charset "utf-8";
+body {
+	font-size: 14px;
+}
+.item {
+    width: 220px;
+    height: auto;
+    margin: 5px;
+    float: left;
+    border: 1px solid #ccc;
+    /*background: #eee;*/
+    overflow: hidden;
+}
+
+.flowLayoutMasonry {
+    max-width: 100%;
+    vertical-align: bottom; 
+}
+
+.item p {
+    font-size: 12px;
+    color: #BEBEBE;
+}
+
+.item span {
+    text-align: center;
+    color: #D2691E;
+}
+
+#container {
+    padding: 10px;
+    /*background-color: #F0FFF0; */
+}

@@ -1,0 +1,726 @@
+package com.anyway.imagemark.controller;
+
+import java.awt.image.ImagingOpException;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
+
+import org.apache.log4j.Logger;
+import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.anyway.imagemark.domain.MarkInfo;
+import com.anyway.imagemark.domain.Merchant;
+import com.anyway.imagemark.domain.Node;
+import com.anyway.imagemark.domain.Notification;
+import com.anyway.imagemark.image.gridFS;
+import com.anyway.imagemark.service.MerchantService;
+import com.anyway.imagemark.utils.CipherUtil;
+import com.anyway.imagemark.utils.PageContent;
+import com.anyway.imagemark.utils.ResultInfo;
+import com.anyway.imagemark.utils.ToolConstants;
+import com.anyway.imagemark.utils.VerifyUtil;
+import com.anyway.imagemark.webDomain.MemberComment;
+import com.anyway.imagemark.webDomain.MerchantInfo;
+import com.anyway.imagemark.webDomain.MerchantMark;
+import com.google.gson.Gson;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
+import com.mongodb.util.JSON;
+
+@Controller
+@RequestMapping(value = "/merchant")
+public class MerchantController {
+	private static Logger log = Logger.getLogger(MerchantController.class);
+	@Autowired
+	private MerchantService merchantService;
+	@Autowired
+	private ResultInfo resultInfo;
+	@Autowired
+	@Qualifier("sessionRegistry")
+	private SessionRegistry sessionRegistry;
+	// @Autowired
+	private PageContent<DBObject> pageContent = new PageContent<DBObject>();
+	private List<Integer> urlListWithType;
+	private Gson gson = new Gson();
+
+	@RequestMapping(value = "/login", method = RequestMethod.GET)
+	@ResponseBody
+	public String login(@RequestParam String merchantName,
+			@RequestParam String merchantPassword, @RequestParam int type,
+			HttpServletRequest request, HttpServletResponse response) {
+		log.info("execute MerchantController--login");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		String ip = request.getHeader("x-forwarded-for");
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("Proxy-Client-IP");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("WL-Proxy-Client-IP");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getRemoteAddr();
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("http_client_ip");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+		}
+		// 如果是多级代理，那么取第一个ip为客户ip
+		if (ip != null && ip.indexOf(",") != -1) {
+			ip = ip.substring(ip.lastIndexOf(",") + 1, ip.length()).trim();
+		}
+		// String password=CipherUtil.generatePassword(merchantPassword);
+		int feedback = merchantService.login(merchantName, merchantPassword,
+				type, ip);
+		if (feedback == ToolConstants.ResultStatus_Success) {
+			Merchant merchant = merchantService
+					.queryMerchantByNameOrMail(merchantName);
+			log.info("response:" + gson.toJson(merchant));
+			resultInfo.setData(merchant);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		} else if (feedback == ToolConstants.ResultStatus_Fail_Password) {
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_Password);
+			resultInfo.setDesc(ToolConstants.PASSWORDFAILED_STRING);
+		} else {
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_NameNotExist);
+			resultInfo.setDesc(ToolConstants.REGISTERNOTDONE_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/welcome", method = RequestMethod.GET)
+	public String showHelloPage(Model model, Principal principal) {
+		log.info("execute MerchantController--showHelloPage");
+		String name = principal.getName();
+		model.addAttribute("username", name);
+		model.addAttribute("message", "Spring Security Custom Form example");
+		return "merchant/home";
+	}
+
+	@RequestMapping(value = "/{username}", method = RequestMethod.GET)
+	public String showUserProfile(@PathVariable String username, Model model) {
+		model.addAttribute(merchantService.queryMerchantByNameOrMail(username));
+		return "merchant/home";
+	}
+
+	@RequestMapping(value = "/queryByMechantNameAndUrl", method = RequestMethod.GET)
+	@ResponseBody
+	public String queryByMechantNameAndUrl(@RequestParam String merchantName,
+			@RequestParam String url, @RequestParam int componentType,
+			@RequestParam int sortType, @RequestParam int pageNumber,
+			@RequestParam int pageSize, HttpServletResponse response) {
+		log.info("execute MerchantController--queryByMechantNameAndUrl");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		pageContent = null;
+		if (merchantName != null) {
+			DBObject query = new BasicDBObject();
+			String _id = merchantService.getIdByMerchantName(merchantName);
+			query.put("mer_id", _id);
+			query.put("Url", url);
+			query.put("componentType", componentType);
+			DBObject sortOrder = new BasicDBObject();
+			switch (sortType) {
+			case 0:
+
+				break;
+			case 1:
+				sortOrder.put("componentPrice", 1);
+				break;
+			case 2:
+				sortOrder.put("componentPrice", -1);
+				break;
+			case 3:
+				sortOrder.put("componentTrust", -1);
+				break;
+			case 4:
+				sortOrder.put("markDate", -1);
+				break;
+			default:
+				break;
+			}
+			pageContent = merchantService.queryByMechantIdAndUrl(query,
+					sortOrder, pageNumber, pageSize);
+			if (pageContent == null) {
+				resultInfo.setData(pageContent);
+				resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+				resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+			} else {
+				resultInfo.setData(pageContent);
+				resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+				resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+			}
+		} else {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_NoAuthority);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_NoAuthority);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+
+	}
+
+	@RequestMapping(value = "/queryMarkedByMerchantNameAndOther", method = RequestMethod.GET)
+	@ResponseBody
+	public String queryMarkedByMerchantNameAndOther(
+			@RequestParam String merchantName,
+			@RequestParam List<String> images, HttpServletResponse response) {
+		log.info("execute MerchantController--queryMarkedByMerchantNameAndOther");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		if (merchantName != null) {
+			urlListWithType = merchantService
+					.queryMarkedByMerchantNameAndOther(merchantName, images);
+		}
+		resultInfo.setData(urlListWithType);
+		resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+		resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/addMerchant", method = RequestMethod.POST)
+
+	@ResponseBody
+	public String addMerchant(@Valid Merchant merchant,
+			BindingResult bindingResult, HttpServletResponse response) {
+		log.info("execute MerchantController--addMerchant");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		if (bindingResult.hasErrors()) {
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_DataIllegal);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_DataIllegal);
+			String json = gson.toJson(resultInfo);
+			return json;
+		}
+		
+		int feedback = merchantService.addMerchant(merchant);
+		if (feedback == ToolConstants.ResultStatus_Success) {
+			VerifyUtil.verifiedMerchantNameList.addFirst(merchant.getMerchantName());
+			log.info("Add to verifiedMerchantNameList with merchantId: "+ merchant.
+					getMerchantName()+"successfully!");
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		} else if (feedback == ToolConstants.ResultStatus_Fail_MailUsed) {
+			log.info("Add MerchantName with merchantId: "+ merchant.
+					getMerchantName()+"mail failed");
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_MailUsed);
+			resultInfo.setDesc(ToolConstants.MAILUSED_STRING);
+		} else if (feedback == ToolConstants.ResultStatus_Fail_NameUsed) {
+			log.info("Add MerchantName with merchantId: "+ merchant.
+					getMerchantName()+"name failed");
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_NameUsed);
+			resultInfo.setDesc(ToolConstants.NAMEUSED_STRING);
+		} else {
+			resultInfo
+					.setStatus(ToolConstants.ResultStatus_Fail_MailAndNameUsed);
+			resultInfo.setDesc(ToolConstants.MAILUSED_STRING
+					+ ToolConstants.NAMEUSED_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/updateMerchant", method = RequestMethod.POST)
+	@ResponseBody
+	public String updateMerchant(@Valid Merchant merchant,
+			BindingResult bindingResult, HttpServletResponse response) {
+		log.info("execute MerchantController--updateMerchant");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		pageContent = null;
+		if (bindingResult.hasErrors()) {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_DataIllegal);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_DataIllegal);
+			String json = gson.toJson(resultInfo);
+			return json;
+		}
+		DBObject update = (DBObject) JSON.parse(gson.toJson(merchant));
+		DBObject query = new BasicDBObject();
+		query.put("_id", merchant.get_id());
+		merchantService.updateMerchant(query, update);
+		resultInfo.setData(pageContent);
+		resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+		resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/saveMarkInfo", method = RequestMethod.POST)
+	@ResponseBody
+	public String saveMarkInfo(
+			@Valid Node node,
+			@Valid MarkInfo markInfo,
+			@RequestParam String merchantName,
+			@RequestParam int width,
+			@RequestParam int height,
+			@RequestParam int previewWidth,
+			@RequestParam int previewHeight,
+			@RequestParam int cropWidth,
+			@RequestParam int cropHeight,
+			@RequestParam int cropX,
+			@RequestParam int cropY,
+			BindingResult bindingResult,
+			@RequestParam(value = "image", required = false) MultipartFile image,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--saveMarkInfo");
+		log.info("widht: " + width + "height: " + height + "previewWidth: "
+				+ previewWidth + "previewHeight: " + previewHeight
+				+ "cropWidth: " + cropWidth + "cropHeight: " + cropHeight
+				+ "cropX: " + cropX + "cropY: " + cropY);
+		log.info("位置信息：" + node.getNodeId() + "x:" + node.getxPosition() + "y:"
+				+ node.getyPosition() + "url" + node.getUrl());
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		int cx = (int) (cropX * ((float) (width) / (float) (previewWidth)));
+		int cy = (int) (cropY * ((float) (height) / (float) (previewHeight)));
+		int cw = (int) (cropWidth * ((float) (width) / (float) (previewWidth)));
+		int ch = (int) (cropHeight * ((float) (height) / (float) (previewHeight)));
+		log.info("rate: " + (float) (previewWidth) / (float) (cropWidth));
+		log.info("cx: " + cx + ";cy: " + cy + ";cw: " + cw + ";ch: " + ch);
+		pageContent = null;
+		markInfo.setMer_id(merchantService.getIdByMerchantName(merchantName));
+		if (bindingResult.hasErrors()) {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_DataIllegal);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_DataIllegal);
+			String json = gson.toJson(resultInfo);
+			return json;
+		}
+		resultInfo.setData(pageContent);
+		System.out.println(gson.toJson(markInfo));
+		// 如果点不存在，保存点位置信息。如果已经存在，不保存点位置信息，设置商品信息的node_id；
+		log.info("位置信息" + node.getNodeId() + "x:" + node.getxPosition() + "y:"
+				+ node.getyPosition() + "url" + node.getUrl());
+		if (node.getNodeId().equals("")) {
+			node.setNodeId((new ObjectId()).toString());
+			String node_id = node.getNodeId();
+			log.info("点不存在,设置_id：" + node_id);
+			int status = merchantService.addNode(node);
+			if (status == ToolConstants.ResultStatus_Success) {
+				markInfo.setNode_id(node_id);
+				int feedback = merchantService.saveMarkInfo(markInfo);
+				System.out.println(feedback);
+				if (feedback == ToolConstants.ResultStatus_Success) {
+					try {
+						log.info("picture store");
+						if (image != null && !image.isEmpty()) {
+							log.info("access to if image!=null");
+							validateImage(image);
+							System.out.println("accessing to saveIMage!");
+							saveImage(markInfo.get_id() + ".png", image, cx,
+									cy, cw, ch);
+							System.out.println("saveIMage successfully!");
+							resultInfo.setStatus(0);
+							resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+						}
+					} catch (ImagingOpException e) {
+						bindingResult.reject(e.getMessage());
+						DBObject condition = new BasicDBObject();
+						condition.put("Url", markInfo.getUrl());
+						condition.put("componentLinkAddress",
+								markInfo.getComponentLinkAddress());
+						merchantService.deleteMarkInfo(condition);
+						resultInfo
+								.setStatus(ToolConstants.ResultStatus_Fail_NoImageMark);
+						resultInfo
+								.setDesc(ToolConstants.SUCCES_WITHOUT_IMAGE_STRING);
+					}
+				} else {
+					resultInfo
+							.setStatus(ToolConstants.ResultStatus_Fail_ExistedError);
+					resultInfo
+							.setDesc(ToolConstants.ResultDesc_Fail_ExistedError);
+				}
+			} else if (status == ToolConstants.ResultStatus_Fail_InsertError) {
+				resultInfo
+						.setStatus(ToolConstants.ResultStatus_Fail_InsertError);
+				resultInfo.setDesc(ToolConstants.ResultDesc_Fail_InsertError);
+			}
+		} else {
+			log.info("点存在：_id" + node.getNodeId());
+			markInfo.setNode_id(node.getNodeId());
+			int feedback = merchantService.saveMarkInfo(markInfo);
+			System.out.println(feedback);
+			if (feedback == ToolConstants.ResultStatus_Success) {
+				try {
+					log.info("picture store");
+					if (image != null && !image.isEmpty()) {
+						log.info("access to if image!=null");
+						validateImage(image);
+						System.out.println("accessing to saveIMage!");
+						saveImage(markInfo.get_id() + ".png", image, cx, cy,
+								cw, ch);
+						System.out.println("saveIMage with name: "+markInfo.get_id()+
+								" successfully!");
+						VerifyUtil.verifiedMarkInfoIdList.addFirst(markInfo.get_id());
+						log.info("Add to verifiedMarkInfoList successfully!");
+						resultInfo.setStatus(0);
+						resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+					}
+				} catch (ImagingOpException e) {
+					bindingResult.reject(e.getMessage());
+					DBObject condition = new BasicDBObject();
+					condition.put("Url", markInfo.getUrl());
+					condition.put("componentLinkAddress",
+							markInfo.getComponentLinkAddress());
+					merchantService.deleteMarkInfo(condition);
+					resultInfo
+							.setStatus(ToolConstants.ResultStatus_Fail_NoImageMark);
+					resultInfo
+							.setDesc(ToolConstants.SUCCES_WITHOUT_IMAGE_STRING);
+				}
+			} else {
+				resultInfo
+						.setStatus(ToolConstants.ResultStatus_Fail_ExistedError);
+				resultInfo.setDesc(ToolConstants.ResultDesc_Fail_ExistedError);
+			}
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	private void validateImage(MultipartFile image) {
+		if (!image.getContentType().equals("image/jpeg")) {
+			throw new ImagingOpException("Only JPG images accepted");
+		}
+		System.out.println("validate successfully!");
+	}
+
+	private void saveImage(String filename, MultipartFile image, int x, int y,
+			int width, int height) throws ImagingOpException {
+		log.info("save image process...");
+		try {
+			log.info("new gridFs");
+			gridFS fs = new gridFS();
+			log.info("start save");
+			fs.saveImage(image, filename, x, y, width, height);
+			System.out.println("picture upload");
+		} catch (Exception e) {
+			throw new ImagingOpException("Unable to save image");
+		}
+	}
+
+	/**
+	 * @author Kario 拉取自身相关的信息
+	 * @param mem_id
+	 *            会员的id
+	 */
+	@RequestMapping(value = "/queryNotification", method = RequestMethod.POST)
+	@ResponseBody
+	public String queryNotification(
+			@RequestParam String merchantName,
+			@RequestParam(value = "type", required = true, defaultValue = "1") int type,
+			@RequestParam(value = "sortType", required = true, defaultValue = "1") int sortType,
+			@RequestParam(value = "page", required = true, defaultValue = "1") int page,
+			@RequestParam(value = "rows", required = true, defaultValue = "10") int rows,
+			HttpServletResponse response) {
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<Notification> pageContent = merchantService
+				.queryNotificationsByType(merchantName, type, sortType, page,
+						rows);
+		if (pageContent != null) {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		} else {
+			resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+			resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/notificationIndex", method = RequestMethod.GET)
+	public String notificationIndex(Model model, Principal principal,
+			HttpServletResponse response) {
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<Notification> notificationPage = merchantService
+				.queryNotificationsByType(principal.getName(),
+						ToolConstants.Notification_Type_Notice,
+						ToolConstants.TIMEASC, ToolConstants.PageNumber_first,
+						ToolConstants.BackGround_Default_PageSize);
+		model.addAttribute("notificationPage", notificationPage);
+		return "merchant/notice";
+	}
+
+	@RequestMapping(value = "/deleteMarkInfo", method = RequestMethod.GET)
+	@ResponseBody
+	public String deleteMarkInfo(@RequestParam List<String> data,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--deleteMarkInfo");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		for (int i = 0; i < data.size(); i++) {
+			merchantService
+					.deleteMarkInfo(new BasicDBObject("_id", data.get(i)));
+		}
+		resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+		resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	@RequestMapping(value = "/updateMarkInfo", method = RequestMethod.POST)
+	@ResponseBody
+	public String updateMarkInfo(@Valid MarkInfo markInfo,
+			BindingResult bindingResult, HttpServletResponse response) {
+		log.info("execute MerchantController--updateMarkInfo");
+		pageContent = null;
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		if (bindingResult.hasErrors()) {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Fail_DataIllegal);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_DataIllegal);
+			String json = gson.toJson(resultInfo);
+			return json;
+		}
+		merchantService.updateMarkInfo(markInfo);
+		resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+		resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的信息
+	@RequestMapping(value = "/getMerchantBehaviours", method = RequestMethod.POST)
+	@ResponseBody
+	public String getMerchantBehaviours(@RequestParam String merchantName,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--getMerchantBehaviours");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		if (merchantName.isEmpty() || merchantName == null) {
+			log.info("execute getMerchantBehaviours merchantName : null or empty!");
+			resultInfo
+					.setStatus(ToolConstants.ResultStatus_Fail_ParameterError);
+			resultInfo.setDesc(ToolConstants.ResultDesc_Fail_ParameterError);
+		} else {
+			log.info("execute getMerchantBehaviours merchantName : "
+					+ merchantName);
+			resultInfo.setData(merchantService
+					.queryMerchantInfoByMerchantName(merchantName));
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的话题--二层显示--第一层(统计标记)
+	@RequestMapping(value = "/getAllMarkCommentsByMerchantName", method = RequestMethod.POST)
+	@ResponseBody
+	public String getAllMarkCommentsByMerchantName(
+			@RequestParam String merchantName, @RequestParam int sortType,
+			@RequestParam int pageNumber, HttpServletResponse response) {
+		log.info("execute MerchantController--getAllMarkCommentsByMerchantName merchantName="
+				+ merchantName);
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<MerchantMark> pageContent = new PageContent<MerchantMark>();
+		pageContent = merchantService.getStatisticalMarksByMerchantName(
+				merchantName, sortType, pageNumber,
+				ToolConstants.BackGround_Default_PageSize);
+		if (pageContent == null) {
+			log.info("getAllMarkCommentsByMerchantName  no data!");
+			resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+			resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+		} else {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的话题--二层显示--第二层(某一标记下的所有评论信息)
+	public String getMarkCommentsByMarkId(@RequestParam String _id,
+			@RequestParam int filter, @RequestParam int sortType,
+			@RequestParam int pageNumber) {
+		PageContent<MemberComment> pageContent = new PageContent<MemberComment>();
+		if (_id.equals("") || _id == null) {
+			log.info("getMarkCommentsByMarkId  " + "_id is null");
+		} else {
+			pageContent = merchantService.getMarkCommentsByMarkId(_id, filter,
+					sortType, pageNumber,
+					ToolConstants.BackGround_Default_PageSize);
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的标记（返回json）
+	@RequestMapping(value = "/getStatisticalMarksByMerchantName", method = RequestMethod.POST)
+	@ResponseBody
+	public String getStatisticalMarksByMerchantName(
+			@RequestParam String merchantName,
+			@RequestParam(value = "sortType", required = true, defaultValue = "1") int sortType,
+			@RequestParam(value = "page", required = true, defaultValue = "1") int page,
+			@RequestParam(value = "rows", required = true, defaultValue = "10") int rows,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--getStatisticalMarksByMerchantName merchantName="
+				+ merchantName);
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<MerchantMark> pageContent = new PageContent<MerchantMark>();
+		pageContent = merchantService.getStatisticalMarksByMerchantName(
+				merchantName, sortType, page,
+				rows);
+		if (pageContent == null) {
+			log.info("getStatisticalMarksByMerchantName  no data!");
+			resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+			resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+		} else {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的标记（返回视图）
+	@RequestMapping(value = "/queryMerchantMarksByMerchantName", method = RequestMethod.GET)
+	public String queryMerchantMarksByMerchantName(
+			@RequestParam String merchantName,
+			@RequestParam(value = "sortType", required = true, defaultValue = "1") int sortType,
+			@RequestParam(value = "page", required = true, defaultValue = "1") int page,
+			@RequestParam(value = "rows", required = true, defaultValue = "10") int rows,Model model) {
+		log.info("execute MerchantController--queryMerchantMarksByMerchantName merchantName="
+				+ merchantName);
+		PageContent<MerchantMark> pageContent = new PageContent<MerchantMark>();
+		pageContent = merchantService.getStatisticalMarksByMerchantName(
+				merchantName, sortType, page,
+				rows);
+		List<MerchantMark> merchantMarkList=new ArrayList<MerchantMark>();
+		if (pageContent == null) {
+			log.info("queryMerchantMarksByMerchantName  no data!");
+		} else {
+			merchantMarkList=pageContent.getList();
+		}
+		model.addAttribute(merchantMarkList);
+		return "merchant/merchantMarkForPublic";
+	}
+
+	// 商家--点位置
+	@RequestMapping(value = "/getNodesByUrl", method = RequestMethod.POST)
+	@ResponseBody
+	public String getNodesByUrl(@RequestParam String url,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--getNodesByUrl  url=" + url);
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<DBObject> pageContent = new PageContent<DBObject>();
+		pageContent = merchantService.queryNode(url, ToolConstants.VALID_INT);
+		if (pageContent == null) {
+			resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+			resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+		} else {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--获取点相关的标记
+	@RequestMapping(value = "/getMarkInfoByNode", method = RequestMethod.GET,produces = { "application/json;charset=UTF-8" })
+	@ResponseBody
+	public String getMarkInfoByNode(@RequestParam String node,
+			@RequestParam int sortType, @RequestParam int page,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--getMarkInfoByNode  node=" + node);
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		PageContent<DBObject> pageContent = new PageContent<DBObject>();
+		pageContent = merchantService.queryMarkByNode(node, sortType, page,
+				ToolConstants.VALID_INT,
+				ToolConstants.ForeGround_Default_PageSize);
+		if (pageContent == null) {
+			log.info("getStatisticalMarksByMerchantName  no data!");
+			resultInfo.setStatus(ToolConstants.ResultStatus_NoData);
+			resultInfo.setDesc(ToolConstants.ResultDesc_NoData);
+		} else {
+			resultInfo.setData(pageContent);
+			resultInfo.setStatus(ToolConstants.ResultStatus_Success);
+			resultInfo.setDesc(ToolConstants.SUCCES_STRING);
+		}
+		String json = gson.toJson(resultInfo);
+		return json;
+	}
+
+	// 商家--我的资料
+	@RequestMapping(value = "/queryMerchantByMerchantName", method = RequestMethod.GET)
+	public String queryMerchantByMerchantName(Model model, Principal principal,
+			HttpServletResponse response) {
+		log.info("execute MerchantController--queryMerchantByMerchantName");
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		String merchantName = principal.getName();
+		if (merchantName.isEmpty() || merchantName == null) {
+			log.info("execute queryMerchantByMerchantName merchantName : null or empty!");
+		} else {
+			log.info("execute queryMerchantByMerchantName merchantName : "
+					+ merchantName);
+			MerchantInfo merchantInfo = merchantService
+					.queryMerchantInfoByMerchantName(merchantName);
+			model.addAttribute("merchantInfo", merchantInfo);
+		}
+		return "merchant/merchantInfo";
+	}
+
+	@RequestMapping(value = "/queryall", method = RequestMethod.GET)
+	@ResponseBody
+	public Map<String, Object> getMerchantList() {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		List<Merchant> merchantList = getMerchants();
+		resultMap.put("merchantList", merchantList);
+		return resultMap;
+	}
+
+	private List<Merchant> getMerchants() {
+		List<Merchant> merchantList = new ArrayList<Merchant>();
+		Merchant mer = new Merchant();
+		mer.setMerchantName("benaa");
+		mer.setMerchantMail("benaa@163.com");
+		mer.setMerchantAddress("高新区西源大道2006号");
+		mer.setMerchantID("54894413131445");
+
+		mer.setMerchantPassword("123456");
+		mer.setMerchantTrust(0);
+		mer.setPhoneNumber("15651357070");
+		mer.setStoreAddress("http://www.taobao.com/maoli");
+		mer.setStoreName("特步");
+		mer.setStoreType("服装");
+		merchantList.add(mer);
+		return merchantList;
+	}
+	//获取当前网页下的所有点信息
+	@RequestMapping(value = "/getAllNodes", method = RequestMethod.POST)
+	@ResponseBody
+	public String  getAllNodes(@RequestParam String urlList,HttpServletResponse response){
+		response.setHeader("Access-Control-Allow-Origin", "*");
+		String[] urlArr=urlList.split(";");
+		log.info("execute MerchantController--getAllNodes");
+		log.info("the urlList:"+gson.toJson(urlList));
+		List<List<DBObject>> nodeList=merchantService.getAllNode(urlArr);
+		log.info(gson.toJson(nodeList));
+		return 	gson.toJson(nodeList);
+	}
+}

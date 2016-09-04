@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:spring="http://www.springframework.org/tags"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+           http://www.springframework.org/schema/context 
+           http://www.springframework.org/schema/context/spring-context-4.0.xsd
+           http://www.springframework.org/schema/aop
+           http://www.springframework.org/schema/aop/spring-aop-4.0.xsd
+           http://www.springframework.org/tags 
+           http://www.springframework.org/tags/spring-tags-3.0.xsd">
+
+
+	<!-- 1.配置connectionFactory -->
+	<bean id="jmsFactory" class="org.apache.activemq.pool.PooledConnectionFactory" destroy-method="stop">
+		<property name="connectionFactory">
+			<bean class="org.apache.activemq.ActiveMQConnectionFactory">
+				<property name="brokerURL">
+					<value>tcp://127.0.0.1:61616</value>
+				</property>
+			</bean>
+		</property>
+		<property name="maxConnections" value="100"></property>
+	</bean>
+
+
+		<!-- 3.配置Spring JMS Template -->
+	<bean id="jmsTemplate" class="org.springframework.jms.core.JmsTemplate">
+		<!-- 3.1 注入jmsFactory -->
+		<property name="connectionFactory" ref="jmsFactory"></property>	
+			
+		<!-- 3.2 配置消息目标 -->
+		<property name="defaultDestination" ref="destination" />
+		
+		<!-- pubSubDomain属性值为true表示destination为Topic类型，默认false表示destination为Queue类型 -->
+		<!--  <property name="pubSubDomain" value="true" /> -->
+		
+		 <!-- 发送模式  DeliveryMode.NON_PERSISTENT=1:非持久 ; DeliveryMode.PERSISTENT=2:持久-->  
+		 <property name="deliveryMode" value="2" />
+	</bean>
+
+	
+	<!-- 2.定义消息目标 -->
+	<bean id="destination" class="org.apache.activemq.command.ActiveMQQueue">
+		<constructor-arg index="0" value="queue_temp"></constructor-arg>
+	</bean>
+	
+	
+	<!-- 4.配置生产者 -->
+	<bean id="activemqProducer" class="com.anyway.imagemark.jms.ActivemqProducer">
+		<property name="jmsTemplate" ref="jmsTemplate"/>
+	</bean>
+
+<!-- 	5.配置消费者 
+	<bean id="activemqConsumer" class="com.xxlong.activemq.SpringConsumer">
+		<property name="jmsTemplate" ref="jmsTemplate"></property>
+		<property name="consumerListener" ref="springListener"></property>
+	</bean>  -->
+	
+	<bean id="activemqListener" class="com.anyway.imagemark.jms.ActivemqListener"></bean>
+
+<!--      <bean id="springListener" class="org.springframework.jms.listener.adapter.MessageListenerAdapter">
+         <constructor-arg ref="springConsumer"/>
+         <property name="defaultListenerMethod" value="onMessage"/>
+     </bean> -->
+     
+     <bean id="activemqListenerContainer" class="org.springframework.jms.listener.DefaultMessageListenerContainer">
+         <property name="connectionFactory" ref="jmsFactory"/>
+         <property name="destination" ref="destination" />
+         <property name="messageListener" ref="activemqListener" />
+
+         <property name="pubSubDomain" value="false"></property>
+    <!--        发布订阅模式
+ 		 <property name="pubSubDomain" value="true" /> -->
+     </bean>
+
+</beans>

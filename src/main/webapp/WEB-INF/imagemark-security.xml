@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:security="http://www.springframework.org/schema/security"
+	xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/security 
+      http://www.springframework.org/schema/security/spring-security-3.2.xsd
+      http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+      http://www.springframework.org/schema/beans 
+      http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+      <!-- <context:component-scan base-package="com.anyway.imagemark" /> -->
+	<security:global-method-security  
+        jsr250-annotations="enabled" secured-annotations="enabled" />
+    <security:http pattern="/login.jsp*" security="none"/>
+	<security:http use-expressions="true" access-denied-page="/login.jsp">
+		<!-- <security:access-denied-handler ref="accessDeniedHandler"/> -->
+		<security:session-management invalid-session-url="/login?time=1"  session-fixation-protection="migrateSession"  session-authentication-error-url="/login.jsp?error=true">
+            <security:concurrency-control max-sessions="1" error-if-maximum-exceeded="true" expired-url="/login?time=1" session-registry-alias="sessionRegistry" />
+        </security:session-management>
+		<security:form-login login-page="/login.jsp" login-processing-url="/login.do"  default-target-url="/dispatch" authentication-failure-url="/login.jsp?error=true" />
+		<security:logout logout-url="/logout" logout-success-url="/login?out=1"  delete-cookies="JSESSIONID" invalidate-session="true" />
+		<!-- <security:intercept-url pattern="/admin/**"
+			access="hasRole('ROLE_ADMIN_ALL') and 
+		hasIpAddress('192.168.1.100')" /> -->
+		<!-- <security:anonymous username="guest"  
+            granted-authority="ROLE_GUEST" /> -->
+		<!-- <security:intercept-url pattern="/" access="isAuthenticated()" /> -->
+		<!-- <security:intercept-url pattern="/**" access="ROLE_MEMBER"/> -->
+		<security:intercept-url pattern="/administrator/welcome*" access="hasAnyRole('ROLE_ADMIN_ALL','ROLE_ADMIN_VERIFIER')" />
+		<security:intercept-url pattern="/member/welcome*" access="hasRole('ROLE_MEMBER')" />
+		<security:intercept-url pattern="/merchant/welcome*" access="hasRole('ROLE_MERCHANT')" />
+		<!-- <security:intercept-url pattern="/**" access="hasAnyRole('ROLE_ADMIN_ALL',
+		'ROLE_ADMIN_VERIFIER','ROLE_MEMBER','ROLE_MERCHANT')" /> -->
+		<security:intercept-url pattern="/login.jsp" access="permitAll" />
+		<security:intercept-url pattern="/logout" access="permitAll" />
+		<security:intercept-url pattern="/**/*.js" access="permitAll"/>
+        <security:intercept-url pattern="/**/*.jpg" access="permitAll"/>
+        <security:intercept-url pattern="/**/*.gif" access="permitAll"/>
+        <security:intercept-url pattern="/**/*.css" access="permitAll"/>
+        <security:intercept-url pattern="/**/*.html*" access="permitAll"/>
+        <security:intercept-url pattern="/**/*.jsp*" access="permitAll"/>
+		<security:intercept-url pattern="/list" access="hasRole('ROLE_EDITOR')" />
+		<security:intercept-url pattern="/imagemark/form" requires-channel="https" />
+		<security:intercept-url pattern="/index" requires-channel="http" />
+	</security:http>
+	<!-- <security:authentication-manager alias="authenticationManager">
+		<security:authentication-provider>  
+            <security:user-service>  
+                <security:user name="admin" password="admin" authorities="ROLE_ADMIN_ALL, ROLE_MERCHANT" />  
+                <security:user name="user" password="user" authorities="ROLE_MEMBER" />  
+            </security:user-service>  
+     	</security:authentication-provider>
+	</security:authentication-manager> -->
+	<security:authentication-manager alias="authenticationManager">
+		<security:authentication-provider
+			user-service-ref="mongoUserDetailsService">
+			<!--<security:password-encoder ref="md5Encoder" />-->
+			<security:password-encoder hash="plaintext"/>
+		</security:authentication-provider>
+	</security:authentication-manager>
+	<bean id="md5Encoder" class="com.anyway.imagemark.utils.MD5Encoder" />
+	<bean id="accessDeniedHandler" class="com.anyway.imagemark.security.MyAccessDeniedHandler" >
+        <property name="accessDeniedUrl" value="/login.jsp" />
+     </bean>
+	<!-- <bean id="memberDetailsService" class="com.anyway.imagemark.security.MemberDetailService" 
+		/> -->
+	<bean id="mongoUserDetailsService"
+		class="com.anyway.imagemark.security.MongoUserDetailsService" />
+</beans>

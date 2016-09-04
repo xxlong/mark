@@ -1,0 +1,70 @@
+.head{
+	line-height:60px;
+	width:100%;
+	height:60px;
+	margin-left: 40px;
+}
+.head_logo{
+	font-size: 40px;
+	font-family:times ;
+	color:#3399FF;
+}
+.welcome{
+	font-size:17px;s
+	padding-left: 70px;
+}
+.btn_password{
+	text-decoration:none;
+	float:right;
+	margin-right: 35px;
+	margin-top:23px;
+	width:75px;
+	height:23px;
+	font-size: 15px;
+	font-weight: normal;
+	}
+	
+
+.btn_exit{
+	text-decoration:none;
+	float:right;
+	margin-right: 13px;
+	margin-top:23px;
+	width:75px;
+	height:23px;
+	font-size: 15px;
+	font-weight: normal;
+	color: #000000;
+}
+.head_option{
+	
+	padding-top: 8px;
+	height:25px;
+	padding-bottom: 10px;
+	font-size: xx-small;
+
+}
+.textfont{
+	font-weight: normal;
+}
+#fontstyle{
+	font-weight: normal;
+}
+
+}
+#bottom {
+	background-image: url(../images/template_r6_c1.png);
+	height: 52px;
+	width: 1004px;
+}
+.btn_style{
+	vertical-align: top;
+	line-height: 24px;
+	font-size: 12px;
+	text-decoration: none;
+	display: inline-block;
+	padding: 0;
+	margin: 5px 4px;
+	color: #000000;
+	
+}

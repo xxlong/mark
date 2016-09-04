@@ -1,0 +1,296 @@
+package com.anyway.imagemark.serviceimpl;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+import org.apache.commons.logging.Log;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+import com.anyway.imagemark.dao.BasicDao;
+import com.anyway.imagemark.daoimpl.MarkInfoDao;
+import com.anyway.imagemark.daoimpl.MerchantDao;
+import com.anyway.imagemark.daoimpl.NodeDao;
+import com.anyway.imagemark.daoimpl.NotificationDao;
+import com.anyway.imagemark.domain.MarkInfo;
+import com.anyway.imagemark.domain.Merchant;
+import com.anyway.imagemark.domain.Node;
+import com.anyway.imagemark.domain.Notification;
+import com.anyway.imagemark.mail.SendMail;
+import com.anyway.imagemark.manage.CommentManage;
+import com.anyway.imagemark.manage.MarkManage;
+import com.anyway.imagemark.manage.MerchantManage;
+import com.anyway.imagemark.service.MerchantService;
+import com.anyway.imagemark.utils.PageContent;
+import com.anyway.imagemark.utils.ToolConstants;
+import com.anyway.imagemark.webDomain.MemberComment;
+import com.anyway.imagemark.webDomain.MerchantInfo;
+import com.anyway.imagemark.webDomain.MerchantMark;
+import com.google.gson.Gson;
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
+import com.mongodb.util.JSON;
+
+@Service
+public class MerchantServiceImpl implements MerchantService {
+	@Autowired
+	@Qualifier("merchantDao")
+	private BasicDao basicDao;
+	@Autowired
+	private CommentManage commentManage;
+	@Autowired
+	private MerchantManage merchantManage;
+	@Autowired
+	private MarkManage markManage;
+	private MerchantDao merchantDao = new MerchantDao();
+	private MarkInfoDao markInfoDao = new MarkInfoDao();
+	private NotificationDao notificationDao = new NotificationDao();
+	private NodeDao nodeDao=new NodeDao();
+	private static Gson gson = new Gson();
+
+	public PageContent<DBObject> queryByMechantIdAndUrl(DBObject query,
+			DBObject sortOrder, int currentPage, int num) {
+		return markInfoDao.search(query, sortOrder, currentPage, num);
+	}
+
+//********************************KG************************************
+	public int addMerchant(Merchant merchant) {
+		// TODO Auto-generated method stub
+		System.out.println("MerchantServiceImpl.addMerchant()");
+		int result = merchantDao.save(merchant);
+		return result;
+	}
+	public int addMerchant(Merchant merchant,String active_url,SendMail sendMail,String randomCode) {
+		// TODO Auto-generated method stub
+		System.out.println("MerchantServiceImpl.addMerchant()");
+		int result = merchantDao.save(merchant,active_url,sendMail,randomCode);
+		return result;
+	}
+	//********************************KG************************************
+    public int addNode(Node node){
+    	System.out.println("MerchantServiceImpl.addNode()");
+		int result = nodeDao.save(node);
+		return result;
+    }
+   public  PageContent<DBObject> queryNode(String url,int status){
+	   DBObject query=new BasicDBObject();
+		String regex=".*?"+url+".*";
+		Pattern pattern=Pattern.compile(regex);
+		query.put("Url", pattern);
+	   //当status为0时，显示状态不为删除的位置
+	   if(status==0){
+		   query.put("status", new BasicDBObject("$ne",ToolConstants.DELETE_INT));
+	   }else{
+		   query.put("status",status);
+	   }
+	   PageContent<DBObject> pageContent=new PageContent<DBObject>();
+	   List<DBObject> list=nodeDao.searchList(query);
+	   if(list!=null){
+	   pageContent.setList(list);
+	   pageContent.setTotal(list.size());
+	   }
+	   return pageContent;
+   }
+	public void deleteMerchant(Merchant merchant) {
+		// TODO Auto-generated method stub
+
+	}
+
+	public void updateMerchant(DBObject query, DBObject update) {
+		// TODO Auto-generated method stub
+		merchantDao.update(query, update);
+	}
+
+	public void deleteMarkInfo(DBObject condition) {
+		// TODO Auto-generated method stub
+		markInfoDao.deleteByCondition(condition);
+	}
+
+	public void updateMarkInfo(DBObject condition, MarkInfo markInfo) {
+		// TODO Auto-generated method stub
+		Gson gson = new Gson();
+		markInfoDao.update(condition,
+				(DBObject) JSON.parse(gson.toJson(markInfo)));
+	}
+	public DBObject getMerchantInfo(String idString){
+		return merchantDao.search(new BasicDBObject().append("_id", idString));
+	}
+
+	public int login(String merchantName, String merchantPassword, int type,
+			String ipInfo) {
+		// TODO Auto-generated method stub
+		return merchantDao.login(merchantName, merchantPassword, type, ipInfo);
+	}
+
+	public int saveMarkInfo(MarkInfo markInfo) {
+		// TODO Auto-generated method stub
+		return markInfoDao.save(markInfo);
+	}
+
+	public void updateMarkInfo(MarkInfo markInfo) {
+		// TODO Auto-generated method stub
+
+	}
+	
+	public MarkInfo queryMarkInfoById(String mark_id) {
+		// TODO Auto-generated method stub
+		DBObject dbObject = markInfoDao.search("_id", mark_id);
+		return gson.fromJson(dbObject.toString(), MarkInfo.class);
+	}
+
+	public List<Integer> queryMarkedByMerchantNameAndOther(String merchantName,
+			List<String> images) {
+		// TODO Auto-generated method stub
+		String mer_id = merchantDao.get_id(merchantName);
+		return markInfoDao.searchMarked(mer_id, images);
+	}
+
+	public String getIdByMerchantName(String merchantName) {
+		// TODO Auto-generated method stub
+		return merchantDao.get_id(merchantName);
+	}
+
+	public PageContent<MemberComment> getMarkCommentsByMarkId(String mark_id,
+			int filter, int sortType, int pageNumber, int pageSize) {
+		// TODO Auto-generated method stub
+		return commentManage.getMarkCommentsByMarkId(mark_id, filter, sortType,
+				pageNumber, pageSize);
+	}
+
+	public PageContent<MerchantMark> getStatisticalMarksByMerchantName(
+			String merchantName, int sortType, int pageNumber, int pageSize) {
+		// TODO Auto-generated method stub
+		return markManage.getStatisticalMarksByMerchantName(merchantName,
+				sortType, pageNumber, pageSize);
+	}
+
+	public PageContent<MerchantMark> getStatisticalTopicByMerchantName(
+			String merchantName, int sortType, int pageNumber, int pageSize) {
+		return markManage.getStatisticalTopicByMerchantName(merchantName,
+				sortType, pageNumber, pageSize);
+	}
+
+	public MerchantInfo queryMerchantInfoByMerchantName(String merchantName) {
+		// TODO Auto-generated method stub
+		return merchantManage.getInfo(merchantName,2);
+	}
+
+/*	public Merchant queryMerchantByNameOrMail(String merchantNameOrMail) {
+		// TODO Auto-generated method stub
+		return merchantDao.getMerchantByNameOrMail(merchantNameOrMail);
+	}*/
+
+	public Merchant queryNotVerifyMerchantByName(String merchantName) {
+		return merchantDao.queryNotVerrifyMerchantByName(merchantName);
+	}
+
+	public PageContent<Notification> queryNotificationsByType(String merchantName,int type,
+			int sortType, int pageNumber, int pageSize) {
+		// TODO Auto-generated method stub
+		DBObject condition = new BasicDBObject();
+		DBObject sortOrder = new BasicDBObject();
+		BasicDBList values = new BasicDBList();
+		values.add("all");
+		values.add("merchant");
+		condition.put("notifier", new BasicDBObject("$in", values));
+		String mer_id=merchantDao.get_id(merchantName);
+		//condition.put("noticeID", mer_id);
+		if (type != 0) {
+			condition.put("type", type);
+		}
+		if (sortType == 1) {
+			sortOrder.put("sendTime", 1);
+		} else {
+			sortOrder.put("sendTime", -1);
+		}
+		List<Notification> notificationList = new ArrayList<Notification>();
+		PageContent<DBObject> list = notificationDao.search(condition,
+				sortOrder, pageNumber, pageSize);
+		PageContent<Notification> pageContent = new PageContent<Notification>();
+		if(list!=null){
+		for (int i = 0; i < list.getList().size(); i++) {
+			notificationList.add(gson.fromJson(
+					list.getList().get(i).toString(), Notification.class));
+		}
+		pageContent.setCurrentRecords(notificationList.size());
+		pageContent.setList(notificationList);
+		pageContent.setPageNumber(pageNumber);
+		pageContent.setPageSize(pageSize);
+		pageContent.setTotalPages(list.getTotalPages());
+		pageContent.setTotal(list.getTotal());
+		return pageContent;
+		}else{
+			return null;
+		}
+	}
+
+	public Notification queryNotificationById(String _id) {
+		// TODO Auto-generated method stub
+		DBObject dbObject = notificationDao.search("_id", _id);
+		return gson.fromJson(dbObject.toString(), Notification.class);
+	}
+	public PageContent<DBObject> queryMarkByNode(String node,int sortType,int currentPage,int status,int pageSize){
+		DBObject query=new BasicDBObject();
+		query.put("node_id", node);
+		query.put("status", status);
+		DBObject sortOrder = new BasicDBObject();
+		switch (sortType) {
+		case 1:
+			sortOrder.put("componentPrice", 1);
+			break;
+		case 2:
+			sortOrder.put("componentPrice", -1);
+			break;
+		case 3:
+			sortOrder.put("componentTrust", -1);
+			break;
+		case 4:
+			sortOrder.put("markDate", -1);
+			break;
+		default:
+			sortOrder = null;
+			System.out.println("have access to sortType!");
+			break;
+		}
+		return markInfoDao.SearchMarkByUrlAndCommented("", query, sortOrder, currentPage, pageSize);
+	}
+	public List<List<DBObject>> getAllNode(String[]  urlList){
+		List<List<DBObject>> nodeList=new ArrayList<List<DBObject>>();
+		for(int i=0;i<urlList.length;i++){
+			String url=urlList[i];
+			nodeList.add(nodeDao.searchNode(url));
+		}
+		return nodeList;
+	}
+	
+	public PageContent<MerchantMark> getMarkInfoByMerchant(String idString,int page,int pagesize){
+		return markManage.getStatisticalMarksByMerchant(idString, page, pagesize);
+	}
+	
+	//*************************************KG********************************************
+	
+	//激活用户
+	public void activeMerchant(String username) {
+		merchantDao.activeMerchant(username);
+	}
+	
+	
+	//根据username查找数据库中的商家
+	public Merchant findMerchantByName(String username){
+		return merchantDao.findMerchantByName(username);
+	}
+	
+	public boolean changepasswd(String username,String newPwd){
+		return merchantDao.changePwd_AM(username, newPwd);
+	}
+	
+
+	public Merchant queryMerchantByNameOrMail(String merchantNameOrMail,int status) {
+		// TODO Auto-generated method stub
+		return merchantDao.getMerchantByNameOrMail(merchantNameOrMail,status);
+	}
+	//*************************************KG********************************************
+}

@@ -1,0 +1,343 @@
+/**
+ * 
+ */
+package com.anyway.imagemark.daoimpl;
+
+import java.util.List;
+import org.apache.log4j.Logger;
+import org.springframework.stereotype.Repository;
+import com.anyway.imagemark.dao.BasicDao;
+import com.anyway.imagemark.domain.Administrator;
+import com.anyway.imagemark.domain.LogInfo;
+import com.anyway.imagemark.utils.PageContent;
+import com.anyway.imagemark.utils.ToolConstants;
+import com.google.gson.Gson;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
+import com.mongodb.util.JSON;
+
+/**
+ * @author Kario
+ * 
+ */
+@Repository("administratorDao")
+public class AdministratorDao implements BasicDao<Administrator> {
+	public Administrator getAdministratorByNameOrMail(String adminNameOrMail) {
+		DBCursor cursor = null;
+		cursor = collection.find(mHelper.createQuery("adminName",
+				adminNameOrMail));
+		if (cursor.hasNext()) {
+			log.info("login use name");
+			return gson.fromJson(cursor.next().toString(), Administrator.class);
+		} else {
+			log.info("login use mail");
+			cursor = collection.find(mHelper.createQuery("adminMail",
+					adminNameOrMail));
+			if (cursor.hasNext())
+				return gson.fromJson(cursor.next().toString(),
+						Administrator.class);
+			else
+				return null;
+		}
+	}
+
+	public int save(Administrator admin) {
+		// return ToolConstants.ResultStatus_Success;
+		int str = 0;
+		if (mailValid(admin.getAdminMail()) && nameValid(admin.getAdminName())) {
+			admin.set_id();
+			admin.setStatus(ToolConstants.VALID_INT);
+			DBObject object = (DBObject) JSON.parse(gson.toJson(admin));
+			collection.insert(object);
+			str = ToolConstants.ResultStatus_Success;
+		} else if (!mailValid(admin.getAdminMail())) {
+			str = ToolConstants.ResultStatus_Fail_MailUsed;
+		} else if (!nameValid(admin.getAdminName())) {
+			str = ToolConstants.ResultStatus_Fail_NameUsed;
+		} else {
+			str = ToolConstants.ResultStatus_Fail_MailAndNameUsed;
+		}
+		return str;
+	}
+
+	public boolean mailValid(String mail) {
+		if (collection.find(mHelper.createQuery("adminMail", mail)).hasNext())
+			return false;
+		else
+			return true;
+	}
+
+	public boolean nameValid(String name) {
+		if (collection.find(mHelper.createQuery("adminName", name)).hasNext())
+			return false;
+		else
+			return true;
+	}
+
+	public DBObject search(String field, String value) {
+		// TODO Auto-generated method stub
+		DBObject query = mHelper.createQuery(field, value);
+		return mHelper.findByCondition(collection, query);
+	}
+
+	public int login(String userName, String pwd, int type, String ipInfo) {
+		int login_status = 0;
+		DBCursor cursor = null;
+		String admin_id = "";
+		if (type == 1) {
+			cursor = collection
+					.find(mHelper.createQuery("adminMail", userName));
+			if (cursor.hasNext()) {
+				admin_id = get_id(mHelper.createQuery("adminMail", userName));
+				DBObject obj = cursor.next();
+				Administrator administrator = gson.fromJson(obj.toString(),
+						Administrator.class);
+				String password = administrator.getAdminPassword();
+				if (administrator.getStatus() == ToolConstants.VALID_INT) {
+					if (password.equals(pwd)) {
+						login_status = ToolConstants.LOGIN_SUCCESS;
+						LogInfoDao lDao = new LogInfoDao();
+						LogInfo logInfo = new LogInfo();
+						logInfo.set_id();
+						logInfo.setUser_id(admin_id);
+						logInfo.setIpInfo(ipInfo);
+						logInfo.setLoginTime(System.currentTimeMillis());
+						logInfo.setLoginType("administrator");
+						lDao.save(logInfo);
+						log.info("login use mail");
+						// lDao.closeClient();
+					} else {
+						login_status = ToolConstants.LOGIN_INCORRECT;
+						log.info("The password and name not correct");
+					}
+				} else {
+					login_status = ToolConstants.ResultStatus_Fail_NoAuthority;
+					log.info("The documnent status  error");
+				}
+			} else {
+				log.info("The documnent status  not exists");
+				login_status = ToolConstants.LOGIN_NOTEXIST;
+			}
+
+		} else if (type == 0) {
+			cursor = collection
+					.find(mHelper.createQuery("adminName", userName));
+			if (cursor.hasNext()) {
+				admin_id = get_id(mHelper.createQuery("adminName", userName));
+				DBObject obj = cursor.next();
+				Administrator administrator = gson.fromJson(obj.toString(),
+						Administrator.class);
+				String password = administrator.getAdminPassword();
+				if (administrator.getStatus() == ToolConstants.VALID_INT) {
+					if (password.equals(pwd)) {
+						login_status = ToolConstants.LOGIN_SUCCESS;
+						LogInfoDao lDao = new LogInfoDao();
+						LogInfo logInfo = new LogInfo();
+						logInfo.set_id();
+						logInfo.setUser_id(admin_id);
+						logInfo.setIpInfo(ipInfo);
+						logInfo.setLoginTime(System.currentTimeMillis());
+						logInfo.setLoginType("administrator");
+						lDao.save(logInfo);
+						log.info("login use name");
+						// lDao.closeClient();
+					} else {
+						login_status = ToolConstants.LOGIN_INCORRECT;
+						log.info("The password and name not correct");
+					}
+				} else {
+					login_status = ToolConstants.ResultStatus_Fail_NoAuthority;
+					log.info("The documnent status  error");
+				}
+			} else {
+				log.info("The documnent status  not exists");
+				login_status = ToolConstants.LOGIN_NOTEXIST;
+			}
+		} else {
+			log.info("The value of type error");
+		}
+		return login_status;
+	}
+
+	public String get_id(DBObject query) {
+		DBCursor cursor = collection.find(query);
+		if (cursor.hasNext())
+			return cursor.next().get("_id").toString();
+		else
+			return ToolConstants.DOCNOTFOUND_STRING;
+	}
+
+	public DBObject search(String field1, String value1, String field2,
+			String value2) {
+		// TODO Auto-generated method stub
+		DBObject query = mHelper.createQuery(field1, value1, field2, value2);
+		return mHelper.findByCondition(collection, query);
+	}
+
+	public DBObject search(DBObject query) {
+		// TODO Auto-generated method stub
+		return mHelper.findByCondition(collection, query);
+	}
+
+	public List<DBObject> search(int num) {
+		// TODO Auto-generated method stub
+		return mHelper.listFindDefault(collection, num);
+	}
+
+	public PageContent<DBObject> search(DBObject query, DBObject sortOrder,
+			int currentPage, int num) {
+		// TODO Auto-generated method stub
+		return mHelper
+				.listPager(collection, query, currentPage, sortOrder, num);
+	}
+
+	public void update(DBObject query, DBObject update) {
+		// TODO Auto-generated method stub
+		if (collection.find(query).hasNext())
+			collection.update(query, update);
+		else {
+			log.info(ToolConstants.ResultDesc_NoData);
+		}
+	}
+
+	public void deleteByCondition(DBObject condition) {
+		// TODO Auto-generated method stub
+		if (collection.find(condition).hasNext()) {
+			update(condition, new BasicDBObject().append("$set",
+					new BasicDBObject().append("status",
+							ToolConstants.DELETE_INT)));
+		}
+	}
+
+	public PageContent<DBObject> Deleted(DBObject query, DBObject sortOrder,
+			int currentPage, int num) {
+		// TODO Auto-generated method stub
+		if (query != null) {
+			query.put("status", ToolConstants.DELETE_INT);
+			log.info("query in not null");
+		} else {
+			query = new BasicDBObject();
+			query.put("status", ToolConstants.DELETE_INT);
+			log.info("query in null");
+		}
+		return mHelper
+				.listPager(collection, query, currentPage, sortOrder, num);
+	}
+
+	public void Restore() {
+		// TODO Auto-generated method stub
+		collection.update(mHelper.createQuery("status",
+				ToolConstants.DELETE_INT), new BasicDBObject().append("$set",
+				new BasicDBObject().append("status", ToolConstants.VALID_INT)),
+				false, true);
+	}
+
+	public void Restore(DBObject query) {
+		// TODO Auto-generated method stub
+		collection.update(query, new BasicDBObject().append("$set",
+				new BasicDBObject().append("status", ToolConstants.VALID_INT)),
+				false, true);
+	}
+
+	public void closeClient() {
+		// TODO Auto-generated method stub
+		mHelper.getConnection().getClient().close();
+	}
+
+	// 单个聚集测试
+	public static void main(String[] args) {
+		AdministratorDao aDao = new AdministratorDao();
+		Administrator myAdmin = new Administrator();
+		myAdmin.set_id();
+		myAdmin.setAdminMail("test@qq.com");
+		myAdmin.setAdminName("test");
+		myAdmin.setAdminPassword("123");
+		log.info(aDao.addAdmin(myAdmin));
+		log.info(aDao.checkIn("test", "123", ""));
+		log.info(aDao.changePwd("test", "123456"));
+		aDao.searchAll();
+	}
+
+	public boolean addAdmin(Administrator admin) {
+		long preCount = collection.count();
+		Gson gson = new Gson();
+		DBObject object = (DBObject) JSON.parse(gson.toJson(admin));
+		collection.insert(object);
+		long currCount = collection.count();
+		if (preCount < currCount)
+			return true;
+		else
+			return false;
+	}
+
+	// 管理员由数据库添加---loginfo
+	public int checkIn(String name, String pwd, String ipInfo) {
+		int string = 0;
+		BasicDBObject query = new BasicDBObject();
+		query.append("adminName", name);
+		DBCursor cursor = collection.find(query);
+		if (cursor.hasNext()) {
+			DBObject obj = cursor.next();
+			String password = obj.get("adminPassword").toString();
+			if (password.equals(pwd)) {
+				string = ToolConstants.ResultStatus_Success;
+				LogInfo logInfo = new LogInfo();
+				logInfo.set_id();
+				logInfo.setIpInfo(ipInfo);
+				logInfo.setLoginTime(System.currentTimeMillis());
+				logInfo.setLoginType("admin");
+				logInfo.setStatus(ToolConstants.VALID_INT);
+				logInfo.setUser_id(obj.get("_id").toString());
+				// 建立连接
+			} else {
+				log.info("password failed");
+				string = ToolConstants.ResultStatus_Fail_Password;
+			}
+		} else {
+			log.info("the name not exists");
+			string = ToolConstants.ResultStatus_Fail_NameNotExist;
+		}
+		return string;
+	}
+
+	// 更改管理员密码
+	public boolean changePwd(String name, String newPwd) {
+		boolean flag = false;
+		BasicDBObject query = new BasicDBObject();
+		query.append("adminName", name);
+		DBCursor cursor = collection.find(query);
+		Administrator admin = new Administrator();
+		if (cursor.hasNext()) {
+			admin = gson
+					.fromJson(cursor.next().toString(), Administrator.class);
+			admin.setAdminPassword(newPwd);
+			DBObject object = (DBObject) JSON.parse(gson.toJson(admin));
+			collection.remove(query);
+			collection.insert(object);
+			flag = true;
+		} else {
+			log.info("该管理员不存在");
+		}
+		// 数据丢失?
+		return flag;
+	}
+
+	// 查询当前所有管理员
+	public void searchAll() {
+		DBCursor cursor = collection.find();
+		while (cursor.hasNext()) {
+			log.info(cursor.next().toString());
+		}
+	}
+
+	private DBCollection collection = mHelper.getConnection().getCollection(
+			"administrator");
+	private static Logger log = Logger.getLogger(Administrator.class);
+
+	public List<DBObject> searchList(DBObject query) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

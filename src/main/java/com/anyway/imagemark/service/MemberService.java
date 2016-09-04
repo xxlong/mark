@@ -1,0 +1,82 @@
+package com.anyway.imagemark.service;
+
+import java.util.List;
+
+import com.anyway.imagemark.domain.ClickInfo;
+import com.anyway.imagemark.domain.Comment;
+import com.anyway.imagemark.domain.Complain;
+import com.anyway.imagemark.domain.MarkInfo;
+import com.anyway.imagemark.domain.Member;
+import com.anyway.imagemark.domain.Merchant;
+import com.anyway.imagemark.domain.Notification;
+import com.anyway.imagemark.mail.SendMail;
+import com.anyway.imagemark.utils.PageContent;
+import com.anyway.imagemark.webDomain.MemberComment;
+import com.anyway.imagemark.webDomain.MemberFoot;
+import com.anyway.imagemark.webDomain.MemberInfo;
+import com.mongodb.DBObject;
+
+public interface MemberService {
+
+	int addMember(Member member);
+
+	void updateMember(DBObject condition, Member member);
+
+	MemberInfo queryMemberInfoByMemberName(String memberName);
+
+	Member queryMemberByNameOrMail(String memberNameOrMail);
+
+	PageContent<Notification> queryNotificationsByType(String memberName,
+			int type, int sortType, int pageNumber, int pageSize);
+
+	Notification queryNotificationById(String _id);
+
+	int saveComment(Comment comment);
+
+	int saveComplain(Complain complain);
+
+	void deleteComment(DBObject condition);
+
+	void updateComment(DBObject condition, Comment comment);
+
+	void saveClickInfo(ClickInfo clickInfo);
+
+	MarkInfo queryMarkInfoByMarkId(String markId);
+
+	PageContent<DBObject> SearchMarkByUrlAndCommented(String memberName,
+			DBObject query, DBObject sortType, int pageNumber, int pageSize);
+
+	String getIdByMemberName(String memberName);
+
+	String getMarkIdByUrlAndComponentLinkAddress(String url,
+			String componentLinkAddress);
+
+	List<Integer> queryMarked(List<String> images);
+
+	PageContent<DBObject> queryMarkInfoByUrl(DBObject query, DBObject sortType,
+			int pageNumber, int pageSize);
+
+	int login(String memberName, String memberPassword, int type, String ipInfo);
+
+	PageContent<MemberFoot> getMemberStatisticalClicks(String memberName,
+			int sortField, int sortType, int pageNumber,int pageSize);
+
+	PageContent<MemberComment> getMemberStatisticalComments(String memberName,
+			int filter, int sortType, int pageNumber,int pageSize);
+	PageContent<DBObject> getRecommend();
+	 PageContent<DBObject> getUserPrased(String userName, int page,
+				int pageSize,int flag);
+	 
+	 
+	 //********************************************KG***************************************************
+	 public Member findMemberByName(String username);
+		public boolean changepasswd(String name,String newPwd);
+		public void activeMember(String username) ;
+		int addMember(Member member,String active_url,SendMail sendMail,String randomCode);
+	//********************************************KG***************************************************
+}
+
+
+
+
+
